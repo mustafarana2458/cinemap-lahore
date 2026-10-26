@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { List, X, ChevronsLeft, ChevronsRight, Navigation } from 'lucide-react'
+import { List, X, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import type { Area, Cinema, CinemaData, Filters as FilterState, LatLng } from './types'
 import { useCinemaData } from './hooks/useCinemaData'
 import { useGeolocation } from './hooks/useGeolocation'
@@ -8,17 +8,23 @@ import { useIsDesktop } from './hooks/useMediaQuery'
 import { useNow } from './hooks/useNow'
 import { dateOptions, formatTime, hasActiveFilters, isPastShow, querySchedule, toISODate, toMinutes } from './lib/schedule'
 import { distanceKm } from './lib/geo'
-import CinemaMap, { type MapHandle, type MapPadding } from './components/Map'
-import CinemaPanel from './components/CinemaPanel'
-import MoviePanel from './components/MoviePanel'
-import CinemaList, { type NextShow } from './components/CinemaList'
+import type { MapHandle, MapPadding } from './components/Map'
+import BrowsePanel, { buildBrowseItems, type BrowseItem, type BrowseView, type NextShow } from './components/BrowsePanel'
 import SearchBar, { type SearchMode } from './components/SearchBar'
 import { DateChip, FiltersButton } from './components/Filters'
 import NowShowing from './components/NowShowing'
 import NearMeButton from './components/NearMeButton'
-import ChatBot, { ChatLauncher } from './components/ChatBot'
+import ChatLauncher from './components/ChatLauncher'
 import Intro from './components/Intro'
 import Toast, { type ToastData } from './components/Toast'
+import { loadMapModule, prefetchMap } from './lib/mapAssets'
+import { useMoving } from './hooks/useMoving'
+
+// Heavy / on-demand parts load as separate chunks (MapLibre alone is ~1 MB)
+const CinemaMap = lazy(loadMapModule)
+const CinemaPanel = lazy(() => import('./components/CinemaPanel'))
+const MoviePanel = lazy(() => import('./components/MoviePanel'))
+const ChatBot = lazy(() => import('./components/ChatBot'))
 
 const ease = [0.22, 1, 0.36, 1] as const
 
@@ -36,13 +42,21 @@ export default function App() {
   const state = useCinemaData()
   /** Flips when the intro video or title card finishes: the map flies in and the UI enters */
   const [revealed, setRevealed] = useState(false)
-  const onIntroFinish = useCallback(() => setRevealed(true), [])
+  /** false when the intro was skipped (already seen this session): no camera swoop either */
+  const [introPlayed, setIntroPlayed] = useState(false)
+  const onIntroFinish = useCallback((played: boolean) => {
+    setIntroPlayed(played)
+    setRevealed(true)
+  }, [])
   return (
     <>
-      <Intro onFinish={onIntroFinish} />
-      <div className="grain" aria-hidden />
+      <Intro onStart={prefetchMap} onFinish={onIntroFinish} />
+      {/* Static grain, only once the intro is gone (never composited over the video) */}
+      {revealed && <div className="grain" aria-hidden />}
+      {/* The app UI mounts when the intro ends, so nothing lays out (or re-lays out when fonts
+          arrive) underneath the video; its entrance animations then play from mount */}
       {state.status === 'ready' ? (
-        <MapExperience data={state.data} revealed={revealed} />
+        revealed && <MapExperience data={state.data} revealed={revealed} introPlayed={introPlayed} />
       ) : state.status === 'error' ? (
         <div className="grid h-full place-items-center p-6 text-center">
           <div>
@@ -55,7 +69,7 @@ export default function App() {
   )
 }
 
-function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean }) {
+function MapExperience({ data, revealed, introPlayed }: { data: CinemaData; revealed: boolean; introPlayed: boolean }) {
   const now = useNow()
   const today = toISODate(now)
   const isDesktop = useIsDesktop()
@@ -65,7 +79,12 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
 
   const initialFilters: FilterState = { date: today, query: '', movieId: null, genre: null, cinemaId: null, timesOfDay: [] }
   const [filters, setFilters] = useState<FilterState>(initialFilters)
-  const [searchMode, setSearchMode] = useState<SearchMode>('movie')
+  /** null until the user picks a tab: the list panel then shows all cinemas */
+  const [searchMode, setSearchMode] = useState<SearchMode | null>(null)
+  /** Search text while no tab is picked (filters the cinema list) */
+  const [cinemaText, setCinemaText] = useState('')
+  /** Keyboard cursor in the list panel (arrow keys in the search input) */
+  const [cursor, setCursor] = useState(0)
   const [locationText, setLocationText] = useState('')
   const [origin, setOrigin] = useState<Origin | null>(null)
   /** Highlighted on the map immediately… */
@@ -81,9 +100,29 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
   const [sheetOpen, setSheetOpen] = useState(false) // mobile results sheet
   const [barFocused, setBarFocused] = useState(false)
   const [toast, setToast] = useState<ToastData | null>(null)
+  // Create the map a beat after the UI mounts, so the two never land in the same frame
+  const [mapReady, setMapReady] = useState(false)
+  useEffect(() => {
+    if (!revealed) return
+    const t = setTimeout(() => setMapReady(true), 250)
+    return () => clearTimeout(t)
+  }, [revealed])
+  const headerMotion = useMoving()
+  const listMotion = useMoving()
+  const stripMotion = useMoving()
+  // Lazy panels mount on first use and stay mounted so their exit animations still play
+  const [usedCinemaPanel, setUsedCinemaPanel] = useState(false)
+  const [usedMoviePanel, setUsedMoviePanel] = useState(false)
+  const [usedChat, setUsedChat] = useState(false)
 
   const patch = useCallback((p: Partial<FilterState>) => setFilters((f) => ({ ...f, ...p })), [])
   const dismissToast = useCallback(() => setToast(null), [])
+
+  useEffect(() => {
+    if (panelId) setUsedCinemaPanel(true)
+    if (moviePanelId) setUsedMoviePanel(true)
+    if (chatOpen) setUsedChat(true)
+  }, [panelId, moviePanelId, chatOpen])
 
   // Roll the date forward if the app is left open past midnight
   useEffect(() => {
@@ -214,6 +253,8 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
   }
 
   const pickArea = (area: Area) => {
+    setSearchMode('location')
+    setSheetOpen(false)
     setLocationText(area.name)
     setOrigin({ lat: area.lat, lng: area.lng, label: area.name })
     closePanel()
@@ -222,24 +263,38 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
     if (!isDesktop) setTimeout(() => setSheetOpen(true), 900)
   }
 
-  const changeMode = (mode: SearchMode) => {
-    if (mode === searchMode) return
+  /** Tab change swaps the list panel's content; null = back to all cinemas */
+  const changeMode = (mode: SearchMode | null) => {
     setSearchMode(mode)
     setMoviePanelId(null)
-    if (mode === 'location') patch({ query: '', movieId: null })
-    else {
+    setCinemaText('')
+    if (mode !== 'movie') patch({ query: '', movieId: null })
+    if (mode !== 'location') {
       setLocationText('')
       setOrigin(null)
     }
+    if (isDesktop) setListOpen(true)
+    else if (mode) setSheetOpen(true)
   }
 
   const clearSearch = () => {
-    setMoviePanelId(null)
-    if (searchMode === 'movie') patch({ query: '', movieId: null })
-    else {
+    if (searchMode === 'movie') {
+      setMoviePanelId(null)
+      patch({ query: '', movieId: null })
+    } else if (searchMode === 'location') {
       setLocationText('')
       setOrigin(null)
-    }
+    } else setCinemaText('')
+  }
+
+  const onSearchText = (text: string) => {
+    if (searchMode === 'movie') patch({ query: text, movieId: null })
+    else if (searchMode === 'location') {
+      setLocationText(text)
+      setOrigin(null) // typing again returns from "Near <area>" to the filtered area list
+    } else setCinemaText(text)
+    if (isDesktop) setListOpen(true)
+    else setSheetOpen(true)
   }
 
   const reset = () => {
@@ -258,35 +313,72 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
     })
   }
 
-  const listCount = filtering ? matches.length : data.cinemas.length
-  const listTitle = pickedMovie ? pickedMovie.title : origin ? `Near ${origin.label}` : 'Cinemas'
-  const listHint = pickedMovie ? 'Showtimes by cinema' : distanceFrom ? 'Nearest first' : 'Top rated'
-
-  const list = (
-    <CinemaList
-      cinemas={data.cinemas}
-      matches={matches}
-      filtering={filtering}
-      nextShow={nextShow}
-      upcoming={upcoming}
-      distanceFrom={distanceFrom}
-      selectedId={selectedId}
-      onSelect={selectCinema}
-    />
+  // ── list panel: content follows the search tab ─────────────
+  const browseView: BrowseView = searchMode === 'movie' ? 'movies' : searchMode === 'location' ? (origin ? 'near' : 'locations') : 'cinemas'
+  const searchText = searchMode === 'movie' ? filters.query : searchMode === 'location' ? locationText : cinemaText
+  // A picked movie's title (or a picked area's name) sits in the input: list everything rather than one row
+  const listQuery = browseView === 'near' || (pickedMovie && filters.query === pickedMovie.title) ? '' : searchText
+  const browseItems = useMemo(
+    () =>
+      buildBrowseItems({
+        view: browseView,
+        query: listQuery,
+        movies: moviesByReach,
+        cinemaCount,
+        areas: data.areas,
+        cinemas: data.cinemas,
+        matches,
+        filtering,
+        nextShow,
+        upcoming,
+        distanceFrom,
+      }),
+    [browseView, listQuery, moviesByReach, cinemaCount, data, matches, filtering, nextShow, upcoming, distanceFrom],
   )
+  const dayLabel = dates.find((d) => d.iso === filters.date)?.label ?? ''
+  const browseTitle = { cinemas: 'Cinemas', movies: 'Movies', locations: 'Locations', near: `Near ${origin?.label ?? ''}` }[browseView]
+  const browseHint = {
+    cinemas: distanceFrom ? 'Nearest first' : 'Top rated',
+    movies: `Most showing first · ${dayLabel}`,
+    locations: 'Lahore areas · pick one to see nearby cinemas',
+    near: 'Nearest first',
+  }[browseView]
 
-  const originChip = origin && (
-    <button
-      type="button"
-      onClick={() => {
-        setOrigin(null)
-        setLocationText('')
-      }}
-      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-300/10 px-2 py-1 text-[10px] font-bold text-sky-200 transition hover:bg-sky-300/20"
-      aria-label={`Stop sorting by distance from ${origin.label}`}
-    >
-      <Navigation className="size-3" /> {origin.label} <X className="size-3" />
-    </button>
+  useEffect(() => setCursor(0), [browseView, listQuery, origin])
+
+  const activate = (item: BrowseItem) => {
+    if (item.kind === 'movie') pickMovie(item.movie.id)
+    else if (item.kind === 'area') pickArea(item.area)
+    else selectCinema(item.cinema.id)
+  }
+  const navigate = (key: 'up' | 'down' | 'enter' | 'escape') => {
+    const n = browseItems.length
+    if (key === 'down') setCursor((c) => (n ? (c + 1) % n : 0))
+    else if (key === 'up') setCursor((c) => (n ? (c - 1 + n) % n : 0))
+    else if (key === 'enter' && browseItems[cursor]) activate(browseItems[cursor])
+    if (!isDesktop && (key === 'down' || key === 'up')) setSheetOpen(true)
+  }
+  const backToLocations = () => {
+    setOrigin(null)
+    setLocationText('')
+  }
+
+  const browsePanel = (size: 'md' | 'lg', headerExtra?: React.ReactNode) => (
+    <BrowsePanel
+      view={browseView}
+      items={browseItems}
+      title={browseTitle}
+      hint={browseHint}
+      onBack={browseView === 'near' ? backToLocations : undefined}
+      cursor={cursor}
+      showCursor={barFocused}
+      selectedCinemaId={selectedId}
+      pickedMovieId={filters.movieId}
+      hasOrigin={!!distanceFrom}
+      onActivate={activate}
+      size={size}
+      headerExtra={headerExtra}
+    />
   )
 
   const dateAndFilters = (
@@ -296,21 +388,12 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
     </>
   )
 
-  const listHeader = (size: 'md' | 'lg') => (
-    <div className="flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <h2 className={`truncate font-display leading-none tracking-wider text-white ${size === 'lg' ? 'text-[28px]' : 'text-2xl'}`}>
-          {listTitle} <span className="text-gold-400">{listCount}</span>
-        </h2>
-        {!origin && <p className="mt-1 text-[11px] font-medium text-neutral-500">{listHint}</p>}
-      </div>
-      {originChip}
-    </div>
-  )
-
   return (
     <div className="relative h-full overflow-hidden">
-      <CinemaMap
+      {/* The map is only created once the intro has finished — nothing competes with video playback */}
+      {mapReady && (
+        <Suspense fallback={null}>
+          <CinemaMap
         ref={mapRef}
         cinemas={data.cinemas}
         matches={matches}
@@ -322,16 +405,19 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
         userLocation={geo.location}
         origin={origin}
         padding={mapPadding}
-        startIntro={revealed}
+        startIntro={introPlayed}
         controlsRight={isDesktop ? rightInset : 12}
-      />
-      <div className="vignette" aria-hidden />
+          />
+        </Suspense>
+      )}
+      {revealed && <div className="vignette" aria-hidden />}
 
       {/* ── Command bar ─────────────────────────────────────── */}
       <motion.header
         initial={{ y: -24, opacity: 0 }}
         animate={revealed ? { y: 0, opacity: 1 } : { y: -24, opacity: 0 }}
-        transition={{ delay: 0.35, duration: 0.7, ease }}
+        transition={{ delay: 0.35, duration: 0.6, ease }}
+        {...headerMotion}
         className="pointer-events-none fixed top-3 right-3 left-3 z-30 lg:top-4 lg:left-4"
         style={isDesktop ? { right: rightInset, transition: 'right 0.5s cubic-bezier(0.22,1,0.36,1)' } : undefined}
       >
@@ -345,17 +431,9 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
           <SearchBar
             mode={searchMode}
             onModeChange={changeMode}
-            value={searchMode === 'movie' ? filters.query : locationText}
-            onChange={(text) => (searchMode === 'movie' ? patch({ query: text, movieId: null }) : setLocationText(text))}
-            movies={moviesByReach}
-            cinemaCount={cinemaCount}
-            cinemas={data.cinemas}
-            areas={data.areas}
-            anchorRef={barRef}
-            pickedMovieId={filters.movieId}
-            onPickMovie={pickMovie}
-            onPickArea={pickArea}
-            onPickCinema={selectCinema}
+            value={searchText}
+            onChange={onSearchText}
+            onNavigate={navigate}
             onClear={clearSearch}
             onFocusChange={setBarFocused}
           />
@@ -371,9 +449,9 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
         {!isDesktop && (
           <div className="pointer-events-auto mt-2 flex items-center gap-2">
             {dateAndFilters}
-            <button type="button" onClick={() => setSheetOpen(true)} className="chip ml-auto glass" aria-label="Show cinema list">
+            <button type="button" onClick={() => setSheetOpen(true)} className="chip ml-auto glass" aria-label={`Show ${browseTitle.toLowerCase()} list`}>
               <List className="size-3.5" />
-              <span>{listCount}</span>
+              <span>{browseItems.length}</span>
             </button>
           </div>
         )}
@@ -393,17 +471,17 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
           initial={{ x: -24, opacity: 0 }}
           animate={{ x: listOpen ? 0 : -(LIST_W + G), opacity: revealed ? 1 : 0 }}
           transition={{ duration: 0.5, ease, opacity: { delay: 0.5 } }}
+          {...listMotion}
           className="glass fixed z-20 flex flex-col rounded-2xl"
           style={{ top: G + BAR_H + G, bottom: G, left: G, width: LIST_W }}
         >
-          <div className="border-b border-white/[0.06] px-5 pt-4 pb-3">{listHeader('md')}</div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{list}</div>
+          {browsePanel('md')}
           <button
             type="button"
             onClick={() => setListOpen((o) => !o)}
             className="glass absolute top-1/2 -right-3 grid h-12 w-6 -translate-y-1/2 place-items-center rounded-lg text-neutral-400 transition hover:text-gold-300"
             style={{ right: listOpen ? -12 : -28 }}
-            aria-label={listOpen ? 'Hide cinema list' : 'Show cinema list'}
+            aria-label={listOpen ? 'Hide list panel' : 'Show list panel'}
           >
             {listOpen ? <ChevronsLeft className="size-3.5" /> : <ChevronsRight className="size-3.5" />}
           </button>
@@ -414,7 +492,8 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
       <motion.div
         initial={{ y: 24, opacity: 0 }}
         animate={revealed ? { y: 0, opacity: 1 } : { y: 24, opacity: 0 }}
-        transition={{ delay: 0.45, duration: 0.7, ease }}
+        transition={{ delay: 0.45, duration: 0.6, ease }}
+        {...stripMotion}
         className="pointer-events-none fixed z-30"
         style={
           isDesktop
@@ -455,21 +534,23 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
               <div className="flex justify-center pt-2">
                 <span className="h-1 w-10 rounded-full bg-white/25" />
               </div>
-              <div className="flex items-start gap-3 px-5 pt-3 pb-3">
-                <div className="min-w-0 flex-1">{listHeader('lg')}</div>
-                <button type="button" onClick={() => setSheetOpen(false)} className="grid size-9 shrink-0 place-items-center rounded-full bg-white/[0.06] text-neutral-300" aria-label="Close list">
-                  <X className="size-4" />
-                </button>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto border-t border-white/[0.06]" onPointerDownCapture={(e) => e.stopPropagation()}>
-                {list}
+              {/* Stop pointer events here so scrolling the list doesn't drag the sheet; the handle above still does */}
+              <div className="flex min-h-0 flex-1 flex-col" onPointerDownCapture={(e) => e.stopPropagation()}>
+                {browsePanel(
+                  'lg',
+                  <button type="button" onClick={() => setSheetOpen(false)} className="grid size-9 shrink-0 place-items-center rounded-full bg-white/[0.06] text-neutral-300" aria-label="Close list">
+                    <X className="size-4" />
+                  </button>,
+                )}
               </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      <CinemaPanel
+      {(usedCinemaPanel || panelCinema) && (
+        <Suspense fallback={null}>
+          <CinemaPanel
         cinema={panelCinema}
         data={data}
         filters={filters}
@@ -481,9 +562,13 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
         onSelectTime={onSelectTime}
         onMovieFilter={pickMovie}
         back={backMovie ? { label: backMovie.title, onBack: backToMovie } : null}
-      />
+          />
+        </Suspense>
+      )}
 
-      <MoviePanel
+      {(usedMoviePanel || panelMovie) && (
+        <Suspense fallback={null}>
+          <MoviePanel
         movie={panelMovie}
         data={data}
         date={filters.date}
@@ -494,9 +579,15 @@ function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean
         onClose={() => setMoviePanelId(null)}
         onSelectCinema={(id) => selectCinema(id, moviePanelId)}
         onSelectTime={onSelectTime}
-      />
+          />
+        </Suspense>
+      )}
 
-      <ChatBot open={chatOpen} onClose={() => setChatOpen(false)} userLocation={geo.location} />
+      {(usedChat || chatOpen) && (
+        <Suspense fallback={null}>
+          <ChatBot open={chatOpen} onClose={() => setChatOpen(false)} userLocation={geo.location} />
+        </Suspense>
+      )}
       <Toast toast={toast} onDismiss={dismissToast} />
     </div>
   )

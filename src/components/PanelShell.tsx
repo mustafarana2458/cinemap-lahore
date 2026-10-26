@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { AnimatePresence, motion, useDragControls, type PanInfo } from 'framer-motion'
+import { useMoving } from '../hooks/useMoving'
 
 interface Props {
   /** Changing this key swaps the panel with an exit/enter animation */
@@ -14,6 +15,7 @@ interface Props {
 /** Side panel on desktop, draggable bottom sheet on mobile. Shared by the Cinema and Movie panels. */
 export default function PanelShell({ panelKey, isDesktop, label, onClose, children }: Props) {
   const drag = useDragControls()
+  const motionState = useMoving()
   const onDragEnd = (_: unknown, info: PanInfo) => {
     if (info.offset.y > 140 || info.velocity.y > 600) onClose()
   }
@@ -28,6 +30,7 @@ export default function PanelShell({ panelKey, isDesktop, label, onClose, childr
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '110%', opacity: 0.4 }}
             transition={{ type: 'spring', stiffness: 260, damping: 32 }}
+            {...motionState}
             className="glass fixed top-4 right-4 bottom-4 z-40 flex w-[440px] flex-col overflow-hidden rounded-3xl"
             aria-label={label}
           >
@@ -53,6 +56,7 @@ export default function PanelShell({ panelKey, isDesktop, label, onClose, childr
               dragConstraints={{ top: 0, bottom: 0 }}
               dragElastic={{ top: 0, bottom: 0.6 }}
               onDragEnd={onDragEnd}
+              {...motionState}
               className="glass fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col overflow-hidden rounded-t-[28px] pb-[env(safe-area-inset-bottom)]"
               aria-label={label}
             >

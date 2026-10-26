@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowUp, RotateCcw, Sparkles, X, AlertTriangle } from 'lucide-react'
+import { useMoving } from '../hooks/useMoving'
 import type { ChatMessage, LatLng } from '../types'
 import { ChatError, sendChat } from '../services/chatService'
 
@@ -17,28 +18,6 @@ const GREETING: ChatMessage = {
   content: "Assalam-o-alaikum! I'm your FilmUp concierge. Ask me what's playing, where, and when — I know every showtime in Lahore this week.",
 }
 
-export function ChatLauncher({ open, onClick, revealed = true }: { open: boolean; onClick: () => void; revealed?: boolean }) {
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      initial={{ scale: 0, rotate: -30 }}
-      animate={revealed ? { scale: 1, rotate: 0 } : { scale: 0, rotate: -30 }}
-      transition={{ delay: revealed ? 0.9 : 0, type: 'spring', stiffness: 260, damping: 18 }}
-      whileHover={{ scale: 1.06 }}
-      whileTap={{ scale: 0.94 }}
-      className="pointer-events-auto relative grid size-12 shrink-0 place-items-center rounded-full lg:size-14 bg-gradient-to-b from-gold-300 to-gold-600 text-ink-950 shadow-[0_0_0_1px_rgb(255_255_255/0.2)_inset,0_10px_40px_-6px_rgb(245_194_107/0.7)]"
-      aria-label={open ? 'Close chat' : 'Ask the FilmUp concierge'}
-    >
-      {!open && <span className="absolute inset-0 animate-ping rounded-full bg-gold-400/30 [animation-duration:2.5s]" />}
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.span key={open ? 'x' : 's'} initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.18 }}>
-          {open ? <X className="size-6" /> : <Sparkles className="size-6" />}
-        </motion.span>
-      </AnimatePresence>
-    </motion.button>
-  )
-}
 
 interface Props {
   open: boolean
@@ -54,6 +33,7 @@ export default function ChatBot({ open, onClose, userLocation }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const motionState = useMoving()
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -105,9 +85,10 @@ export default function ChatBot({ open, onClose, userLocation }: Props) {
     <AnimatePresence>
       {open && (
         <motion.div
-          initial={{ opacity: 0, y: 24, scale: 0.94, filter: 'blur(8px)' }}
-          animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, y: 24, scale: 0.94, filter: 'blur(8px)' }}
+          initial={{ opacity: 0, y: 24, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 24, scale: 0.96 }}
+          {...motionState}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
           style={{ transformOrigin: 'bottom right' }}
           className="glass fixed inset-x-3 top-3 bottom-3 z-[55] flex flex-col overflow-hidden rounded-3xl sm:inset-auto sm:right-4 sm:bottom-[92px] sm:h-[600px] sm:max-h-[calc(100dvh-124px)] sm:w-[400px]"

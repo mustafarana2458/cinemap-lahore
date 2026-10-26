@@ -21,10 +21,10 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import type { Cinema, CinemaSchedule, LatLng } from '../types'
 import { formatTime } from '../lib/schedule'
 import { installRotationGestures } from '../lib/mapGestures'
+import { STYLE_URL } from '../lib/mapAssets'
 
 setWorkerUrl(workerUrl)
 
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/dark'
 const START = { longitude: 74.31, latitude: 31.5, zoom: 9.3, pitch: 0, bearing: 0 }
 const CLOSE_UP = { center: [74.3466, 31.5155] as [number, number], zoom: 14.6, pitch: 66, bearing: -32 }
 const HOME = { center: [74.322, 31.452] as [number, number], zoom: 11.35, pitch: 58, bearing: -18 }
@@ -61,7 +61,7 @@ interface Props {
   userLocation: LatLng | null
   origin: (LatLng & { label: string }) | null
   padding: MapPadding
-  /** Becomes true when the intro (video or title card) has finished; starts the camera fly-in */
+  /** The map mounts after the intro. true = play the camera swoop; false (intro skipped) = jump straight to the overview */
   startIntro: boolean
   /** Distance of the map controls from the right edge (moves left when the panel opens) */
   controlsRight: number
@@ -84,7 +84,7 @@ export default function CinemaMap(props: Props) {
   // The GL map instance once loaded — controls subscribe to it directly so rotating
   // doesn't re-render this component (and every marker) on each frame
   const [glMap, setGlMap] = useState<MLMap | null>(null)
-  const hint = useRotateHint(startIntro ? 5500 : null)
+  const hint = useRotateHint(4000)
 
   const pad = useCallback(
     (extra = 0) => ({ top: padding.top + extra, bottom: padding.bottom + extra, left: padding.left + extra, right: padding.right + extra }),
@@ -210,10 +210,10 @@ export default function CinemaMap(props: Props) {
   // No cleanup on purpose: StrictMode runs effects twice and a cleanup would cancel it.
   const introRan = useRef(false)
   useEffect(() => {
-    if (!startIntro || !glMap || introRan.current) return
+    if (!glMap || introRan.current) return
     introRan.current = true
     const map = glMap
-    if (reducedMotion()) return void map.jumpTo({ ...HOME, padding: pad() })
+    if (!startIntro || reducedMotion()) return void map.jumpTo({ ...HOME, padding: pad() })
 
     let interrupted = false
     const stop = () => (interrupted = true)
@@ -231,7 +231,8 @@ export default function CinemaMap(props: Props) {
   }, [startIntro, glMap, pad])
 
   return (
-    <div className="absolute inset-0 z-0">
+    // Fades in once the style has loaded, so the hand-over from the intro is a clean dissolve
+    <div className="absolute inset-0 z-0 transition-opacity duration-500 will-change-[opacity]" style={{ opacity: glMap ? 1 : 0 }}>
       <MapGL
         ref={mapRef}
         mapStyle={STYLE_URL}

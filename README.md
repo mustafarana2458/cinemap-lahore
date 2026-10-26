@@ -64,7 +64,7 @@ The camera API (`flyToCinema`, `flyToPoint`, `fitPoints`, `resetView`) is expose
 
 ## Intro video
 
-On load the app plays the video described by `public/intro/manifest.json`, then fades into the map and starts the camera fly-in. It plays muted with a "Tap for sound" toggle (shown only if the audio isn't near-silent), a Skip button and a thin progress line. A poster frame shows while it loads. If there is no manifest, the video errors, autoplay is refused, or playback hasn't started within 4 s, it falls back to the FilmUp title card.
+On the first visit in a browser session, `index.html` itself starts `/intro/intro-720.mp4`, before the JS bundle loads, so playback begins at once. React then adopts that element, fades into the map (opacity only, 0.5 s), and the map is created only after the intro ends. The intro is skipped on reloads in the same session (`sessionStorage`) and for reduced-motion users. The video is H.264 for everyone, because it's hardware-decoded on Macs; VP9 often isn't. It plays muted with a "Tap for sound" toggle (shown only if the audio isn't near-silent), a Skip button and a thin progress line. A poster frame shows while it loads. If there is no manifest, the video errors, autoplay is refused, or playback hasn't started within 4 s, it falls back to the FilmUp title card.
 
 To replace the footage (needs `ffmpeg` on PATH):
 
