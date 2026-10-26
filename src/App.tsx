@@ -10,6 +10,7 @@ import { dateOptions, formatTime, hasActiveFilters, isPastShow, querySchedule, t
 import { distanceKm } from './lib/geo'
 import CinemaMap, { type MapHandle, type MapPadding } from './components/Map'
 import CinemaPanel from './components/CinemaPanel'
+import MoviePanel from './components/MoviePanel'
 import CinemaList, { type NextShow } from './components/CinemaList'
 import SearchBar, { type SearchMode } from './components/SearchBar'
 import { DateChip, FiltersButton } from './components/Filters'
@@ -20,7 +21,6 @@ import Intro from './components/Intro'
 import Toast, { type ToastData } from './components/Toast'
 
 const ease = [0.22, 1, 0.36, 1] as const
-const INTRO_MS = 1500
 
 /* Layout constants (8px grid). Desktop = ≥1024px. */
 const G = 16 // outer gutter
@@ -34,12 +34,15 @@ type Origin = LatLng & { label: string }
 
 export default function App() {
   const state = useCinemaData()
+  /** Flips when the intro video or title card finishes: the map flies in and the UI enters */
+  const [revealed, setRevealed] = useState(false)
+  const onIntroFinish = useCallback(() => setRevealed(true), [])
   return (
     <>
-      <Intro />
+      <Intro onFinish={onIntroFinish} />
       <div className="grain" aria-hidden />
       {state.status === 'ready' ? (
-        <CineMap data={state.data} />
+        <MapExperience data={state.data} revealed={revealed} />
       ) : state.status === 'error' ? (
         <div className="grid h-full place-items-center p-6 text-center">
           <div>
@@ -52,12 +55,13 @@ export default function App() {
   )
 }
 
-function CineMap({ data }: { data: CinemaData }) {
+function MapExperience({ data, revealed }: { data: CinemaData; revealed: boolean }) {
   const now = useNow()
   const today = toISODate(now)
   const isDesktop = useIsDesktop()
   const geo = useGeolocation()
   const mapRef = useRef<MapHandle>(null)
+  const barRef = useRef<HTMLDivElement>(null)
 
   const initialFilters: FilterState = { date: today, query: '', movieId: null, genre: null, cinemaId: null, timesOfDay: [] }
   const [filters, setFilters] = useState<FilterState>(initialFilters)
@@ -68,6 +72,10 @@ function CineMap({ data }: { data: CinemaData }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   /** …panel opens once the camera arrives */
   const [panelId, setPanelId] = useState<string | null>(null)
+  /** Movie Detail panel */
+  const [moviePanelId, setMoviePanelId] = useState<string | null>(null)
+  /** Set when a cinema was opened from the Movie panel, so it can offer "Back to movie" */
+  const [backToMovieId, setBackToMovieId] = useState<string | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
   const [listOpen, setListOpen] = useState(true) // desktop sidebar
   const [sheetOpen, setSheetOpen] = useState(false) // mobile results sheet
@@ -103,15 +111,23 @@ function CineMap({ data }: { data: CinemaData }) {
     return { cinemaCount, nextShow }
   }, [data, filters.date, now, movieTitle])
 
+  /** Every movie, most widely showing (on the selected date) first */
+  const moviesByReach = useMemo(
+    () => [...data.movies].sort((a, b) => (cinemaCount.get(b.id) ?? 0) - (cinemaCount.get(a.id) ?? 0) || a.title.localeCompare(b.title)),
+    [data, cinemaCount],
+  )
   const nowShowing = useMemo(() => {
     const playing = new Set(data.showtimes.map((s) => s.movieId))
-    return data.movies.filter((m) => playing.has(m.id)).sort((a, b) => (cinemaCount.get(b.id) ?? 0) - (cinemaCount.get(a.id) ?? 0))
-  }, [data, cinemaCount])
+    return moviesByReach.filter((m) => playing.has(m.id))
+  }, [data, moviesByReach])
 
   const upcoming = useCallback((times: string[]) => times.filter((t) => !isPastShow(filters.date, t, now)), [filters.date, now])
 
   const panelCinema = (panelId && byId.get(panelId)) || null
-  const panelOpen = isDesktop && !!panelCinema
+  const panelMovie = data.movies.find((m) => m.id === moviePanelId) ?? null
+  const backMovie = data.movies.find((m) => m.id === backToMovieId) ?? null
+  const anyPanel = !!panelId || !!moviePanelId
+  const panelOpen = isDesktop && (!!panelCinema || !!panelMovie)
   const showTimes = Boolean(filters.movieId || filters.query.trim())
   const distanceFrom: LatLng | null = origin ?? geo.location
   const pickedMovie = data.movies.find((m) => m.id === filters.movieId) ?? null
@@ -126,7 +142,7 @@ function CineMap({ data }: { data: CinemaData }) {
     [isDesktop, listOpen],
   )
   // On mobile the results sheet covers the lower ~60% just like the detail panel does
-  const mapPadding = useMemo(() => paddingFor(!!panelId || (!isDesktop && sheetOpen)), [paddingFor, panelId, isDesktop, sheetOpen])
+  const mapPadding = useMemo(() => paddingFor(anyPanel || (!isDesktop && sheetOpen)), [paddingFor, anyPanel, isDesktop, sheetOpen])
 
   // Frame the matching cinemas whenever the filtered set changes
   const matchKey = matches.map((m) => m.cinema.id).sort().join(',')
@@ -145,21 +161,27 @@ function CineMap({ data }: { data: CinemaData }) {
     setOrigin(null)
   }, [geo.location, data.cinemas])
 
+  // Esc closes the top-most panel: the cinema first, then the movie
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      setPanelId(null)
-      setSelectedId(null)
+      if (panelId || selectedId) {
+        setPanelId(null)
+        setSelectedId(null)
+        setBackToMovieId(null)
+      } else setMoviePanelId(null)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [panelId, selectedId])
 
   // ── actions ─────────────────────────────────────────────────
-  const selectCinema = (id: string) => {
+  const selectCinema = (id: string, fromMovieId: string | null = null) => {
     const cinema = byId.get(id)
     if (!cinema) return
     setSheetOpen(false)
+    setMoviePanelId(null)
+    setBackToMovieId(fromMovieId)
     setSelectedId(id)
     setPanelId(null)
     mapRef.current?.flyToCinema(cinema, () => setPanelId(id), paddingFor(true))
@@ -167,21 +189,35 @@ function CineMap({ data }: { data: CinemaData }) {
   const closePanel = () => {
     setPanelId(null)
     setSelectedId(null)
+    setBackToMovieId(null)
   }
 
+  /** Movie search + open its detail panel (dropdown, Now Showing strip, posters in the cinema panel) */
   const pickMovie = (id: string | null) => {
     const movie = data.movies.find((m) => m.id === id)
     setSearchMode('movie')
     setLocationText('')
     patch({ movieId: movie?.id ?? null, query: movie?.title ?? '' })
     closePanel()
-    if (movie && !isDesktop) setSheetOpen(true)
+    setSheetOpen(false)
+    setMoviePanelId(movie?.id ?? null)
+  }
+
+  const backToMovie = () => {
+    if (!backToMovieId) return
+    const id = backToMovieId
+    closePanel()
+    setMoviePanelId(id)
+    if (filters.movieId !== id) patch({ movieId: id, query: data.movies.find((m) => m.id === id)?.title ?? '' })
+    // The match set hasn't changed, so the auto-framing effect won't fire — frame it here
+    setTimeout(() => mapRef.current?.fitPoints(matches.map((m) => m.cinema)), 50)
   }
 
   const pickArea = (area: Area) => {
     setLocationText(area.name)
     setOrigin({ lat: area.lat, lng: area.lng, label: area.name })
     closePanel()
+    setMoviePanelId(null)
     mapRef.current?.flyToPoint(area, 14)
     if (!isDesktop) setTimeout(() => setSheetOpen(true), 900)
   }
@@ -189,6 +225,7 @@ function CineMap({ data }: { data: CinemaData }) {
   const changeMode = (mode: SearchMode) => {
     if (mode === searchMode) return
     setSearchMode(mode)
+    setMoviePanelId(null)
     if (mode === 'location') patch({ query: '', movieId: null })
     else {
       setLocationText('')
@@ -197,6 +234,7 @@ function CineMap({ data }: { data: CinemaData }) {
   }
 
   const clearSearch = () => {
+    setMoviePanelId(null)
     if (searchMode === 'movie') patch({ query: '', movieId: null })
     else {
       setLocationText('')
@@ -284,7 +322,7 @@ function CineMap({ data }: { data: CinemaData }) {
         userLocation={geo.location}
         origin={origin}
         padding={mapPadding}
-        introDelay={INTRO_MS}
+        startIntro={revealed}
         controlsRight={isDesktop ? rightInset : 12}
       />
       <div className="vignette" aria-hidden />
@@ -292,12 +330,13 @@ function CineMap({ data }: { data: CinemaData }) {
       {/* ── Command bar ─────────────────────────────────────── */}
       <motion.header
         initial={{ y: -24, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 1.5, duration: 0.7, ease }}
+        animate={revealed ? { y: 0, opacity: 1 } : { y: -24, opacity: 0 }}
+        transition={{ delay: 0.35, duration: 0.7, ease }}
         className="pointer-events-none fixed top-3 right-3 left-3 z-30 lg:top-4 lg:left-4"
         style={isDesktop ? { right: rightInset, transition: 'right 0.5s cubic-bezier(0.22,1,0.36,1)' } : undefined}
       >
         <div
+          ref={barRef}
           className={`glass pointer-events-auto flex h-14 w-full items-center gap-2 rounded-2xl p-2 transition-shadow duration-300 lg:max-w-[880px] ${
             barFocused ? 'shadow-[var(--shadow-panel),0_0_0_1px_rgb(245_194_107/0.35),0_0_32px_-8px_rgb(245_194_107/0.45)]' : ''
           }`}
@@ -308,9 +347,11 @@ function CineMap({ data }: { data: CinemaData }) {
             onModeChange={changeMode}
             value={searchMode === 'movie' ? filters.query : locationText}
             onChange={(text) => (searchMode === 'movie' ? patch({ query: text, movieId: null }) : setLocationText(text))}
-            movies={data.movies}
+            movies={moviesByReach}
+            cinemaCount={cinemaCount}
             cinemas={data.cinemas}
             areas={data.areas}
+            anchorRef={barRef}
             pickedMovieId={filters.movieId}
             onPickMovie={pickMovie}
             onPickArea={pickArea}
@@ -350,8 +391,8 @@ function CineMap({ data }: { data: CinemaData }) {
       {isDesktop && (
         <motion.aside
           initial={{ x: -24, opacity: 0 }}
-          animate={{ x: listOpen ? 0 : -(LIST_W + G), opacity: 1 }}
-          transition={{ duration: 0.5, ease, opacity: { delay: 1.65 } }}
+          animate={{ x: listOpen ? 0 : -(LIST_W + G), opacity: revealed ? 1 : 0 }}
+          transition={{ duration: 0.5, ease, opacity: { delay: 0.5 } }}
           className="glass fixed z-20 flex flex-col rounded-2xl"
           style={{ top: G + BAR_H + G, bottom: G, left: G, width: LIST_W }}
         >
@@ -372,8 +413,8 @@ function CineMap({ data }: { data: CinemaData }) {
       {/* ── Now Showing strip + chat launcher ───────────────── */}
       <motion.div
         initial={{ y: 24, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 1.55, duration: 0.7, ease }}
+        animate={revealed ? { y: 0, opacity: 1 } : { y: 24, opacity: 0 }}
+        transition={{ delay: 0.45, duration: 0.7, ease }}
         className="pointer-events-none fixed z-30"
         style={
           isDesktop
@@ -381,7 +422,7 @@ function CineMap({ data }: { data: CinemaData }) {
             : { bottom: 'max(12px, env(safe-area-inset-bottom))', left: 12, right: 12 + 48 + 8 }
         }
       >
-        <NowShowing movies={nowShowing} cinemaCount={cinemaCount} selectedId={filters.movieId} onSelect={pickMovie} />
+        <NowShowing revealed={revealed} movies={nowShowing} cinemaCount={cinemaCount} selectedId={filters.movieId} onSelect={pickMovie} />
       </motion.div>
       <div
         className="fixed z-30"
@@ -391,7 +432,7 @@ function CineMap({ data }: { data: CinemaData }) {
             : { bottom: 'calc(max(12px, env(safe-area-inset-bottom)) + 8px)', right: 12 }
         }
       >
-        <ChatLauncher open={chatOpen} onClick={() => setChatOpen((o) => !o)} />
+        <ChatLauncher revealed={revealed} open={chatOpen} onClick={() => setChatOpen((o) => !o)} />
       </div>
 
       {/* ── Mobile results sheet ────────────────────────────── */}
@@ -439,6 +480,20 @@ function CineMap({ data }: { data: CinemaData }) {
         onClose={closePanel}
         onSelectTime={onSelectTime}
         onMovieFilter={pickMovie}
+        back={backMovie ? { label: backMovie.title, onBack: backToMovie } : null}
+      />
+
+      <MoviePanel
+        movie={panelMovie}
+        data={data}
+        date={filters.date}
+        now={now}
+        isDesktop={isDesktop}
+        distanceFrom={distanceFrom}
+        onDateChange={(date) => patch({ date })}
+        onClose={() => setMoviePanelId(null)}
+        onSelectCinema={(id) => selectCinema(id, moviePanelId)}
+        onSelectTime={onSelectTime}
       />
 
       <ChatBot open={chatOpen} onClose={() => setChatOpen(false)} userLocation={geo.location} />
@@ -449,7 +504,7 @@ function CineMap({ data }: { data: CinemaData }) {
 
 function Logo() {
   return (
-    <a href="/" className="group flex shrink-0 items-center gap-2 pr-1" aria-label="CineMap home">
+    <a href="/" className="group flex shrink-0 items-center gap-2 pr-1" aria-label="FilmUp home">
       <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-b from-white/[0.08] to-white/[0.02] ring-1 ring-gold-400/25">
         <svg viewBox="0 0 24 24" className="size-5 text-gold-400 transition-transform duration-700 group-hover:rotate-180" fill="none" stroke="currentColor" strokeWidth="1.8">
           <circle cx="12" cy="12" r="9" />
@@ -460,9 +515,7 @@ function Logo() {
           <circle cx="12" cy="12" r="1" className="fill-ember-500 stroke-none" />
         </svg>
       </span>
-      <span className="hidden font-display text-[26px] leading-none tracking-[0.1em] text-white 2xl:block">
-        Cine<span className="text-gold-gradient">Map</span>
-      </span>
+      <span className="wordmark hidden text-[22px] lg:block">FilmUp</span>
     </a>
   )
 }

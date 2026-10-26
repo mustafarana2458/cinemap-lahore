@@ -14,21 +14,21 @@ const SUGGESTIONS = [
 
 const GREETING: ChatMessage = {
   role: 'assistant',
-  content: "Assalam-o-alaikum! I'm your CineMap concierge. Ask me what's playing, where, and when — I know every showtime in Lahore this week.",
+  content: "Assalam-o-alaikum! I'm your FilmUp concierge. Ask me what's playing, where, and when — I know every showtime in Lahore this week.",
 }
 
-export function ChatLauncher({ open, onClick }: { open: boolean; onClick: () => void }) {
+export function ChatLauncher({ open, onClick, revealed = true }: { open: boolean; onClick: () => void; revealed?: boolean }) {
   return (
     <motion.button
       type="button"
       onClick={onClick}
       initial={{ scale: 0, rotate: -30 }}
-      animate={{ scale: 1, rotate: 0 }}
-      transition={{ delay: 2, type: 'spring', stiffness: 260, damping: 18 }}
+      animate={revealed ? { scale: 1, rotate: 0 } : { scale: 0, rotate: -30 }}
+      transition={{ delay: revealed ? 0.9 : 0, type: 'spring', stiffness: 260, damping: 18 }}
       whileHover={{ scale: 1.06 }}
       whileTap={{ scale: 0.94 }}
       className="pointer-events-auto relative grid size-12 shrink-0 place-items-center rounded-full lg:size-14 bg-gradient-to-b from-gold-300 to-gold-600 text-ink-950 shadow-[0_0_0_1px_rgb(255_255_255/0.2)_inset,0_10px_40px_-6px_rgb(245_194_107/0.7)]"
-      aria-label={open ? 'Close chat' : 'Ask the CineMap concierge'}
+      aria-label={open ? 'Close chat' : 'Ask the FilmUp concierge'}
     >
       {!open && <span className="absolute inset-0 animate-ping rounded-full bg-gold-400/30 [animation-duration:2.5s]" />}
       <AnimatePresence mode="wait" initial={false}>
@@ -112,7 +112,7 @@ export default function ChatBot({ open, onClose, userLocation }: Props) {
           style={{ transformOrigin: 'bottom right' }}
           className="glass fixed inset-x-3 top-3 bottom-3 z-[55] flex flex-col overflow-hidden rounded-3xl sm:inset-auto sm:right-4 sm:bottom-[92px] sm:h-[600px] sm:max-h-[calc(100dvh-124px)] sm:w-[400px]"
           role="dialog"
-          aria-label="CineMap concierge chat"
+          aria-label="FilmUp concierge chat"
         >
           {/* glow */}
           <div className="pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-gold-400/20 blur-3xl" />

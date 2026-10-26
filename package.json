@@ -1,5 +1,5 @@
 {
-  "name": "cinemap",
+  "name": "filmup",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -8,7 +8,8 @@
     "dev:netlify": "netlify dev",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "intro": "node scripts/encode-intro.mjs"
   },
   "dependencies": {
     "framer-motion": "^14.6.0",

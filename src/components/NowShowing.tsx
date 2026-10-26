@@ -9,16 +9,18 @@ interface Props {
   cinemaCount: Map<string, number>
   selectedId: string | null
   onSelect: (id: string | null) => void
+  /** Pills stagger in once the intro has finished */
+  revealed: boolean
 }
 
-const row = { hidden: {}, show: { transition: { staggerChildren: 0.04, delayChildren: 1.7 } } }
+const row = { hidden: {}, show: { transition: { staggerChildren: 0.04, delayChildren: 0.6 } } }
 const pill = {
   hidden: { opacity: 0, y: 12 },
   show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] as const } },
 }
 
 /** Slim bottom strip: poster thumbnail + title pills. Clicking one filters the map. */
-export default function NowShowing({ movies, cinemaCount, selectedId, onSelect }: Props) {
+export default function NowShowing({ movies, cinemaCount, selectedId, onSelect, revealed }: Props) {
   const scroller = useRef<HTMLDivElement>(null)
   const scroll = (dir: 1 | -1) => scroller.current?.scrollBy({ left: dir * scroller.current.clientWidth * 0.75, behavior: 'smooth' })
 
@@ -35,7 +37,7 @@ export default function NowShowing({ movies, cinemaCount, selectedId, onSelect }
         ref={scroller}
         variants={row}
         initial="hidden"
-        animate="show"
+        animate={revealed ? 'show' : 'hidden'}
         className="no-scrollbar flex min-w-0 flex-1 snap-x items-center gap-2 overflow-x-auto scroll-smooth py-2 [mask-image:linear-gradient(90deg,transparent,#000_16px,#000_calc(100%-24px),transparent)]"
       >
         {movies.map((m) => {

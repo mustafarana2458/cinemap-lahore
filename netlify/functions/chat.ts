@@ -161,7 +161,7 @@ function buildSystemPrompt(client: Body['client']): string {
     return lines
   })
 
-  return `You are the CineMap concierge, a warm and concise movie-night assistant for cinemas in Lahore, Pakistan.
+  return `You are the FilmUp concierge, a warm and concise movie-night assistant for cinemas in Lahore, Pakistan.
 
 Current local date and time for the user: ${today} ${formatTime(time)} (${TIMEZONE}). "Tonight" means shows from 5 PM onward today. Shows that already started today are no longer available — never suggest them.
 ${location ? 'The user shared their location; distances are listed per cinema. Prefer closer cinemas when relevant.' : 'The user has not shared a location. If they ask what is near them, suggest the "Near me" button or ask for their area.'}

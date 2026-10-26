@@ -1,4 +1,4 @@
-# CineMap
+# FilmUp
 
 Every cinema in Lahore and every showtime, on one dark, cinematic map — with an AI concierge that knows the whole week's schedule.
 
@@ -61,6 +61,21 @@ Other scripts: `npm run build` (typecheck + production build), `npm run typechec
 - **Controls** (right edge): zoom, compass (click to reset north), 2D/3D toggle and reset view. You can also right-drag or two-finger-drag to rotate and tilt.
 
 The camera API (`flyToCinema`, `flyToPoint`, `fitPoints`, `resetView`) is exposed through a ref, so `App.tsx` decides when the camera moves.
+
+## Intro video
+
+On load the app plays the video described by `public/intro/manifest.json`, then fades into the map and starts the camera fly-in. It plays muted with a "Tap for sound" toggle (shown only if the audio isn't near-silent), a Skip button and a thin progress line. A poster frame shows while it loads. If there is no manifest, the video errors, autoplay is refused, or playback hasn't started within 4 s, it falls back to the FilmUp title card.
+
+To replace the footage (needs `ffmpeg` on PATH):
+
+```bash
+npm run intro -- "path/to/master.mp4"                 # landscape 720p mobile version
+npm run intro -- "path/to/master.mp4" --mobile-crop   # 720x1280 centre crop for phones
+```
+
+This writes desktop 1080p H.264 and VP9 files (sized to about 5 MB), mobile 720p versions (about 2.5 MB), the posters and the manifest into `public/intro/`. No code changes are needed. Keep the master file out of git: root-level video files are already in `.gitignore`.
+
+**Only use footage you have the rights to.** Third-party studio intros (for example Marvel Studios') are copyrighted and trademarked, and can't be used on a commercial site.
 
 ## Search modes
 

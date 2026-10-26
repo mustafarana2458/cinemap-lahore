@@ -6,3 +6,12 @@ dist
 .netlify
 *.log
 .DS_Store
+
+# Source/master video files (often 50 MB+; GitHub rejects >100 MB). Only the
+# encoded web versions in public/intro/ belong in the repo.
+/*.mp4
+/*.mov
+/*.mkv
+/*.webm
+/*.m4v
+/*.avi

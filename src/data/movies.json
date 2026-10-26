@@ -3,100 +3,215 @@
     "id": "iron-monsoon",
     "title": "Iron Monsoon",
     "poster": "/posters/iron-monsoon.svg",
-    "genre": ["Action", "Thriller"],
+    "genre": [
+      "Action",
+      "Thriller"
+    ],
     "duration": 128,
     "language": "English",
     "rating": "PG-13",
-    "synopsis": "A disgraced coast-guard pilot has one stormy night to stop a heist on a floating port before the monsoon swallows it whole."
+    "synopsis": "A disgraced coast-guard pilot has one stormy night to stop a heist on a floating port before the monsoon swallows it whole. Grounded after a rescue gone wrong, Sameer Khan is the only one who spots the crew slipping aboard — and the only one reckless enough to fly into the eye of the storm.",
+    "director": "Danish Rafiq",
+    "cast": [
+      "Arsalan Mirza",
+      "Hira Qureshi",
+      "Tom Beckett",
+      "Sana Javed Khan"
+    ],
+    "releaseYear": 2026,
+    "trailerUrl": "https://www.youtube.com/results?search_query=Iron+Monsoon+official+trailer"
   },
   {
     "id": "midnight-anarkali",
     "title": "Midnight in Anarkali",
     "poster": "/posters/midnight-anarkali.svg",
-    "genre": ["Romance", "Drama"],
+    "genre": [
+      "Romance",
+      "Drama"
+    ],
     "duration": 138,
     "language": "Urdu",
     "rating": "PG",
-    "synopsis": "Two strangers keep meeting in Lahore's oldest bazaar at midnight — and each time, a different decade waits outside."
+    "synopsis": "Two strangers keep meeting in Lahore's oldest bazaar at midnight — and each time, a different decade waits outside. As Zoya and Hamid trace the lanes from the 1950s to the present day, they realise the bazaar is trying to tell them something about a love story that ended too soon, and that their own meetings may not be an accident at all.",
+    "director": "Mehreen Saeed",
+    "cast": [
+      "Zara Malik",
+      "Faris Ahmed",
+      "Nadia Baig",
+      "Kamran Lodhi"
+    ],
+    "releaseYear": 2026,
+    "trailerUrl": "https://www.youtube.com/results?search_query=Midnight+in+Anarkali+official+trailer"
   },
   {
     "id": "orbit-of-ash",
     "title": "Orbit of Ash",
     "poster": "/posters/orbit-of-ash.svg",
-    "genre": ["Sci-Fi", "Adventure"],
+    "genre": [
+      "Sci-Fi",
+      "Adventure"
+    ],
     "duration": 151,
     "language": "English",
     "rating": "PG-13",
-    "synopsis": "The last crew of a mining station must decide whether to return to an Earth that has stopped answering."
+    "synopsis": "The last crew of a mining station must decide whether to return to an Earth that has stopped answering. With oxygen rationed and the station's AI keeping secrets of its own, commander Rhea Calloway has to choose between the mission she was sent on and the people who are still alive to bring home.",
+    "director": "Elena Varga",
+    "cast": [
+      "Marcus Hale",
+      "Aiko Tanaka",
+      "Idris Okafor",
+      "Lena Brandt"
+    ],
+    "releaseYear": 2025,
+    "trailerUrl": "https://www.youtube.com/results?search_query=Orbit+of+Ash+official+trailer"
   },
   {
     "id": "shehr-e-raaz",
     "title": "Shehr-e-Raaz",
     "poster": "/posters/shehr-e-raaz.svg",
-    "genre": ["Thriller", "Crime"],
+    "genre": [
+      "Thriller",
+      "Crime"
+    ],
     "duration": 118,
     "language": "Urdu",
     "rating": "15+",
-    "synopsis": "A crime reporter follows a trail of anonymous letters through the Walled City and finds her own name in the last one."
+    "synopsis": "A crime reporter follows a trail of anonymous letters through the Walled City and finds her own name in the last one.",
+    "director": "Omer Farooq Butt",
+    "cast": [
+      "Ayesha Raza",
+      "Bilal Haider",
+      "Saba Pervez",
+      "Junaid Akhtar"
+    ],
+    "releaseYear": 2026
   },
   {
     "id": "chai-and-chaos",
     "title": "Chai & Chaos",
     "poster": "/posters/chai-and-chaos.svg",
-    "genre": ["Comedy", "Family"],
+    "genre": [
+      "Comedy",
+      "Family"
+    ],
     "duration": 112,
     "language": "Urdu",
     "rating": "U",
-    "synopsis": "Three generations, one tiny dhaba and a wedding catering order that was never supposed to be theirs."
+    "synopsis": "Three generations, one tiny dhaba and a wedding catering order that was never supposed to be theirs.",
+    "director": "Saima Noor Akhtar",
+    "cast": [
+      "Waseem Iqbal",
+      "Rubina Shah",
+      "Ali Zafar Mehdi",
+      "Mahnoor Khan"
+    ],
+    "releaseYear": 2026,
+    "trailerUrl": "https://www.youtube.com/results?search_query=Chai+and+Chaos+official+trailer"
   },
   {
     "id": "hollow-pines",
     "title": "Hollow Pines",
     "poster": "/posters/hollow-pines.svg",
-    "genre": ["Horror"],
+    "genre": [
+      "Horror"
+    ],
     "duration": 104,
     "language": "English",
     "rating": "18+",
-    "synopsis": "A winter retreat in the Murree hills turns sinister when the guests realise the forest is counting them."
+    "synopsis": "A winter retreat in the Murree hills turns sinister when the guests realise the forest is counting them.",
+    "director": "James Whitlow",
+    "cast": [
+      "Clara Dunne",
+      "Rafael Ortiz",
+      "Hannah Kerr",
+      "Owen Pryce"
+    ],
+    "releaseYear": 2025,
+    "trailerUrl": "https://www.youtube.com/results?search_query=Hollow+Pines+official+trailer"
   },
   {
     "id": "paper-kites",
     "title": "Paper Kites",
     "poster": "/posters/paper-kites.svg",
-    "genre": ["Animation", "Family"],
+    "genre": [
+      "Animation",
+      "Family"
+    ],
     "duration": 96,
     "language": "English",
     "rating": "U",
-    "synopsis": "On the eve of Basant, a shy boy's homemade kite comes alive and carries him across a city of rooftops."
+    "synopsis": "On the eve of Basant, a shy boy's homemade kite comes alive and carries him across a city of rooftops.",
+    "director": "Nida Aslam",
+    "cast": [
+      "voice: Rayan Siddiqui",
+      "voice: Mariam Chaudhry",
+      "voice: Peter Lang"
+    ],
+    "releaseYear": 2026,
+    "trailerUrl": "https://www.youtube.com/results?search_query=Paper+Kites+official+trailer"
   },
   {
     "id": "raag",
     "title": "Raag",
     "poster": "/posters/raag.svg",
-    "genre": ["Musical", "Drama"],
+    "genre": [
+      "Musical",
+      "Drama"
+    ],
     "duration": 130,
     "language": "Punjabi",
     "rating": "PG",
-    "synopsis": "A gifted qawwal's daughter defies her family to compete in a national music contest — on her father's harmonium."
+    "synopsis": "A gifted qawwal's daughter defies her family to compete in a national music contest — on her father's harmonium.",
+    "director": "Asad Ul Haq",
+    "cast": [
+      "Noor Fatima",
+      "Ustad Karim Bakhsh",
+      "Hamza Riaz",
+      "Shazia Gill"
+    ],
+    "releaseYear": 2026
   },
   {
     "id": "velocity-zero",
     "title": "Velocity Zero",
     "poster": "/posters/velocity-zero.svg",
-    "genre": ["Action", "Sci-Fi"],
+    "genre": [
+      "Action",
+      "Sci-Fi"
+    ],
     "duration": 124,
     "language": "English",
     "rating": "PG-13",
-    "synopsis": "When time freezes for everyone but her, a courier races to deliver the one package that can restart the world."
+    "synopsis": "When time freezes for everyone but her, a courier races to deliver the one package that can restart the world.",
+    "director": "Kenji Morrow",
+    "cast": [
+      "Simone Achebe",
+      "Daniel Kovac",
+      "Priya Raman",
+      "Leo Strand"
+    ],
+    "releaseYear": 2026,
+    "trailerUrl": "https://www.youtube.com/results?search_query=Velocity+Zero+official+trailer"
   },
   {
     "id": "the-last-lantern",
     "title": "The Last Lantern",
     "poster": "/posters/the-last-lantern.svg",
-    "genre": ["Fantasy", "Adventure"],
+    "genre": [
+      "Fantasy",
+      "Adventure"
+    ],
     "duration": 142,
     "language": "English",
     "rating": "PG",
-    "synopsis": "A lamplighter's apprentice must carry the final flame across a kingdom where darkness has a voice."
+    "synopsis": "A lamplighter's apprentice must carry the final flame across a kingdom where darkness has a voice.",
+    "director": "Fiona Calder",
+    "cast": [
+      "Theo Marsh",
+      "Isla Fenwick",
+      "Arjun Mehta",
+      "Greta Holm"
+    ],
+    "releaseYear": 2025
   }
 ]

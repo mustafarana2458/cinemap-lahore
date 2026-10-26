@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { AnimatePresence, motion, useDragControls, type PanInfo } from 'framer-motion'
-import { Navigation, Phone, Star, X, MapPin, Clapperboard, MonitorPlay, ShieldAlert } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Navigation, Phone, Star, X, MapPin, Clapperboard, MonitorPlay, ShieldAlert, ChevronLeft } from 'lucide-react'
 import type { Cinema, CinemaData, Filters, LatLng } from '../types'
 import { cinemaDay, dateOptions, timeOfDay, toISODate } from '../lib/schedule'
 import { directionsUrl, distanceKm, formatDistance } from '../lib/geo'
 import DateSelector from './DateSelector'
 import MovieCard from './MovieCard'
+import PanelShell from './PanelShell'
 
 interface Props {
   cinema: Cinema | null
@@ -18,69 +19,18 @@ interface Props {
   onClose: () => void
   onSelectTime: (cinema: Cinema, movieId: string, time: string) => void
   onMovieFilter: (movieId: string) => void
+  /** Shown as "Back to <label>" when the cinema was opened from the Movie panel */
+  back?: { label: string; onBack: () => void } | null
 }
 
 const list = { hidden: {}, show: { transition: { staggerChildren: 0.06, delayChildren: 0.15 } } }
 
 export default function CinemaPanel(props: Props) {
   const { cinema, isDesktop, onClose } = props
-  const drag = useDragControls()
-
-  const onDragEnd = (_: unknown, info: PanInfo) => {
-    if (info.offset.y > 140 || info.velocity.y > 600) onClose()
-  }
-
   return (
-    <AnimatePresence>
-      {cinema &&
-        (isDesktop ? (
-          <motion.aside
-            key="panel"
-            initial={{ x: '110%', opacity: 0.4 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: '110%', opacity: 0.4 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 32 }}
-            className="glass fixed top-4 right-4 bottom-4 z-40 flex w-[440px] flex-col overflow-hidden rounded-3xl"
-            aria-label={`${cinema.name} details`}
-          >
-            <PanelBody {...props} cinema={cinema} />
-          </motion.aside>
-        ) : (
-          <>
-            <motion.div
-              key="scrim"
-              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={onClose}
-            />
-            <motion.aside
-              key="sheet"
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', stiffness: 300, damping: 34 }}
-              drag="y"
-              dragControls={drag}
-              dragListener={false}
-              dragConstraints={{ top: 0, bottom: 0 }}
-              dragElastic={{ top: 0, bottom: 0.6 }}
-              onDragEnd={onDragEnd}
-              className="glass fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col overflow-hidden rounded-t-[28px] pb-[env(safe-area-inset-bottom)]"
-              aria-label={`${cinema.name} details`}
-            >
-              <div
-                onPointerDown={(e) => drag.start(e)}
-                className="absolute inset-x-0 top-0 z-20 flex h-7 cursor-grab touch-none justify-center pt-2.5 active:cursor-grabbing"
-              >
-                <span className="h-1.5 w-11 rounded-full bg-white/30" />
-              </div>
-              <PanelBody {...props} cinema={cinema} onHeroPointerDown={(e) => drag.start(e)} />
-            </motion.aside>
-          </>
-        ))}
-    </AnimatePresence>
+    <PanelShell panelKey={cinema ? `cinema-${cinema.id}` : null} isDesktop={isDesktop} label={`${cinema?.name ?? 'Cinema'} details`} onClose={onClose}>
+      {(startDrag) => cinema && <PanelBody {...props} cinema={cinema} onHeroPointerDown={startDrag} />}
+    </PanelShell>
   )
 }
 
@@ -94,6 +44,7 @@ function PanelBody({
   onClose,
   onSelectTime,
   onMovieFilter,
+  back,
   onHeroPointerDown,
 }: Props & { cinema: Cinema; onHeroPointerDown?: (e: React.PointerEvent) => void }) {
   const [imgLoaded, setImgLoaded] = useState(false)
@@ -128,6 +79,17 @@ function PanelBody({
         />
         <div className="absolute inset-0 bg-gradient-to-t from-ink-900 via-ink-900/50 to-ink-900/10" />
         <div className="absolute inset-0 bg-gradient-to-r from-ink-950/60 to-transparent" />
+        {back && (
+          <button
+            type="button"
+            onClick={back.onBack}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="absolute top-4 left-4 z-10 inline-flex h-9 max-w-[60%] items-center gap-1 rounded-full bg-black/55 pr-3.5 pl-2 text-xs font-bold text-white backdrop-blur transition hover:bg-black/75 active:scale-95"
+          >
+            <ChevronLeft className="size-4 shrink-0" />
+            <span className="truncate">Back to {back.label}</span>
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}

@@ -7,7 +7,8 @@
    - Camera moves are imperative via the MapHandle ref, so App decides
      *when* the camera moves (select → fly → then open the panel)
    ────────────────────────────────────────────────────────────── */
-import { useCallback, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import MapGL, { Layer, Marker, Source, type MapRef } from 'react-map-gl/maplibre'
 import type { FeatureCollection, Point, Polygon } from 'geojson'
 import { setWorkerUrl, type ExpressionSpecification, type Map as MLMap } from 'maplibre-gl'
@@ -15,10 +16,11 @@ import { setWorkerUrl, type ExpressionSpecification, type Map as MLMap } from 'm
 // pre-bundles (dev) or hashes (build) the library. Hand it a URL Vite actually serves.
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import Supercluster from 'supercluster'
-import { Compass, Home, Minus, Plus, Box } from 'lucide-react'
+import { Compass, Home, Minus, Plus, Box, RotateCcw, RotateCw, X } from 'lucide-react'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { Cinema, CinemaSchedule, LatLng } from '../types'
 import { formatTime } from '../lib/schedule'
+import { installRotationGestures } from '../lib/mapGestures'
 
 setWorkerUrl(workerUrl)
 
@@ -59,8 +61,8 @@ interface Props {
   userLocation: LatLng | null
   origin: (LatLng & { label: string }) | null
   padding: MapPadding
-  /** Delay before the intro fly-in, so it plays after the title card */
-  introDelay: number
+  /** Becomes true when the intro (video or title card) has finished; starts the camera fly-in */
+  startIntro: boolean
   /** Distance of the map controls from the right edge (moves left when the panel opens) */
   controlsRight: number
 }
@@ -75,12 +77,14 @@ const BEAM: Record<PinState, { color: string; height: number }> = {
 }
 
 export default function CinemaMap(props: Props) {
-  const { ref, cinemas, matches, filtering, showTimes, upcoming, selectedId, onSelect, userLocation, origin, padding, introDelay, controlsRight } = props
+  const { ref, cinemas, matches, filtering, showTimes, upcoming, selectedId, onSelect, userLocation, origin, padding, startIntro, controlsRight } = props
   const mapRef = useRef<MapRef>(null)
   const flyToken = useRef(0)
   const [zoom, setZoom] = useState(START.zoom)
-  const [bearing, setBearing] = useState(0)
-  const [pitch, setPitch] = useState(0)
+  // The GL map instance once loaded — controls subscribe to it directly so rotating
+  // doesn't re-render this component (and every marker) on each frame
+  const [glMap, setGlMap] = useState<MLMap | null>(null)
+  const hint = useRotateHint(startIntro ? 5500 : null)
 
   const pad = useCallback(
     (extra = 0) => ({ top: padding.top + extra, bottom: padding.bottom + extra, left: padding.left + extra, right: padding.right + extra }),
@@ -191,7 +195,25 @@ export default function CinemaMap(props: Props) {
     if (!map) return
     if (import.meta.env.DEV) (window as unknown as { __map: MLMap }).__map = map // for debugging in devtools
     cinematize(map)
-    if (reducedMotion()) return void map.jumpTo(HOME)
+
+    // Rotation: right-drag / Ctrl+drag, two-finger twist + tilt, plus our Shift+scroll and Safari gestures
+    map.dragRotate.enable()
+    map.touchZoomRotate.enable()
+    map.touchZoomRotate.enableRotation()
+    map.touchPitch.enable()
+    installRotationGestures(map, hint.markUsed)
+    map.on('rotatestart', (e) => e.originalEvent && hint.markUsed())
+    setGlMap(map)
+  }
+
+  // Camera fly-in: runs once, after both the intro has finished and the map has loaded.
+  // No cleanup on purpose: StrictMode runs effects twice and a cleanup would cancel it.
+  const introRan = useRef(false)
+  useEffect(() => {
+    if (!startIntro || !glMap || introRan.current) return
+    introRan.current = true
+    const map = glMap
+    if (reducedMotion()) return void map.jumpTo({ ...HOME, padding: pad() })
 
     let interrupted = false
     const stop = () => (interrupted = true)
@@ -205,8 +227,8 @@ export default function CinemaMap(props: Props) {
       map.once('moveend', () => {
         if (!interrupted) setTimeout(() => !interrupted && map.easeTo({ ...HOME, padding: pad(), duration: 2600, essential: true }), 400)
       })
-    }, introDelay)
-  }
+    }, 200)
+  }, [startIntro, glMap, pad])
 
   return (
     <div className="absolute inset-0 z-0">
@@ -217,6 +239,10 @@ export default function CinemaMap(props: Props) {
         minZoom={9}
         maxZoom={19}
         maxPitch={78}
+        dragRotate
+        pitchWithRotate
+        touchZoomRotate
+        touchPitch
         pixelRatio={Math.min(window.devicePixelRatio, 2)}
         attributionControl={{ compact: true }}
         onLoad={onLoad}
@@ -224,8 +250,6 @@ export default function CinemaMap(props: Props) {
           const z = Math.floor(e.viewState.zoom * 2) / 2
           setZoom((prev) => (prev === z ? prev : z))
         }}
-        onRotate={(e) => setBearing(e.viewState.bearing)}
-        onPitch={(e) => setPitch(e.viewState.pitch)}
         style={{ position: 'absolute', inset: 0 }}
       >
         <Source id="cinema-ground" type="geojson" data={groundPoints}>
@@ -271,17 +295,38 @@ export default function CinemaMap(props: Props) {
           if ('cluster' in f.properties && f.properties.cluster) {
             const count = f.properties.point_count
             const clusterId = f.properties.cluster_id
+            // Clusters take the strongest state of the cinemas inside them, like single pins do
+            const ids = index.getLeaves(clusterId, Infinity).map((leaf) => (leaf.properties as { id: string }).id)
+            const showing = filtering ? ids.filter((id) => matchById.has(id)).length : 0
+            const state: PinState = selectedId && ids.includes(selectedId) ? 'active' : filtering ? (showing ? 'match' : 'dim') : 'normal'
+            const label = filtering
+              ? `${showing} of ${count} cinemas here ${showing === 1 ? 'is' : 'are'} showing it — zoom in`
+              : `${count} cinemas — zoom in`
             return (
-              <Marker key={`cl-${clusterId}`} longitude={lng} latitude={lat} anchor="center">
+              <Marker
+                key={`cl-${clusterId}`}
+                longitude={lng}
+                latitude={lat}
+                anchor="center"
+                style={{ zIndex: state === 'active' ? 30 : state === 'match' ? 20 : state === 'dim' ? 1 : 10 }}
+              >
                 <button
                   type="button"
-                  className="cm-cluster"
-                  aria-label={`${count} cinemas — zoom in`}
+                  className={`cm-cluster is-${state}`}
+                  aria-label={label}
+                  title={label}
                   onClick={() =>
                     mapRef.current?.getMap().flyTo({ center: [lng, lat], zoom: index.getClusterExpansionZoom(clusterId) + 0.5, pitch: 55, duration: 1200 })
                   }
                 >
-                  {count}
+                  {filtering && showing > 0 ? (
+                    <>
+                      <span className="cm-cluster-count">{showing}</span>
+                      <span className="cm-cluster-label">showing</span>
+                    </>
+                  ) : (
+                    count
+                  )}
                 </button>
               </Marker>
             )
@@ -322,18 +367,8 @@ export default function CinemaMap(props: Props) {
         )}
       </MapGL>
 
-      <Controls
-        bearing={bearing}
-        pitch={pitch}
-        offsetRight={controlsRight}
-        onZoom={(d) => {
-          const map = mapRef.current?.getMap()
-          map?.easeTo({ zoom: map.getZoom() + d, duration: 300 })
-        }}
-        onNorth={() => mapRef.current?.getMap().easeTo({ bearing: 0, duration: 600 })}
-        onTilt={() => mapRef.current?.getMap().easeTo({ pitch: pitch > 20 ? 0 : 60, duration: 700 })}
-        onReset={handle.resetView}
-      />
+      <Controls map={glMap} offsetRight={controlsRight} onReset={handle.resetView} onRotate={hint.markUsed} />
+      <RotateHint visible={hint.visible} offsetRight={controlsRight} onDismiss={hint.markUsed} />
     </div>
   )
 }
@@ -368,39 +403,159 @@ function Pin({ cinema, state, times, showName }: { cinema: Cinema; state: PinSta
   )
 }
 
+const easeOut = (t: number) => 1 - Math.pow(1 - t, 3)
+
 interface ControlsProps {
-  bearing: number
-  pitch: number
+  map: MLMap | null
   offsetRight: number
-  onZoom: (delta: number) => void
-  onNorth: () => void
-  onTilt: () => void
   onReset: () => void
+  onRotate: () => void
 }
 
-function Controls({ bearing, pitch, offsetRight, onZoom, onNorth, onTilt, onReset }: ControlsProps) {
-  const btn = 'grid size-10 place-items-center text-neutral-300 transition hover:bg-white/8 hover:text-gold-300'
+function Controls({ map, offsetRight, onReset, onRotate }: ControlsProps) {
+  const compass = useRef<SVGSVGElement>(null)
+  const [tilted, setTilted] = useState(false)
+  // Where a run of rotate-button clicks is heading, so rapid clicks stack cleanly in 45° steps
+  const target = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!map) return
+    const sync = () => {
+      if (compass.current) compass.current.style.transform = `rotate(${-map.getBearing() - 45}deg)`
+      const t = map.getPitch() > 20
+      setTilted((prev) => (prev === t ? prev : t))
+    }
+    sync()
+    map.on('rotate', sync)
+    map.on('pitch', sync)
+    return () => {
+      map.off('rotate', sync)
+      map.off('pitch', sync)
+    }
+  }, [map])
+
+  const rotateBy = (deg: number) => {
+    if (!map) return
+    const base = target.current ?? Math.round(map.getBearing() / 45) * 45
+    target.current = base + deg
+    map.easeTo({ bearing: target.current, duration: 500, easing: easeOut })
+    map.once('moveend', () => (target.current = null))
+    onRotate()
+  }
+
+  const btn = 'grid size-10 place-items-center text-neutral-300 transition-colors duration-150 hover:bg-white/[0.07] hover:text-gold-300 active:bg-white/[0.12]'
   return (
     <div
       className="glass fixed top-1/2 z-20 flex -translate-y-1/2 flex-col overflow-hidden rounded-2xl transition-[right] duration-500"
       style={{ right: offsetRight }}
     >
-      <button type="button" className={`${btn} hidden sm:grid`} onClick={() => onZoom(1)} aria-label="Zoom in">
+      <button type="button" className={`${btn} hidden sm:grid`} onClick={() => map?.easeTo({ zoom: map.getZoom() + 1, duration: 300 })} aria-label="Zoom in" title="Zoom in">
         <Plus className="size-4" />
       </button>
-      <button type="button" className={`${btn} hidden sm:grid`} onClick={() => onZoom(-1)} aria-label="Zoom out">
+      <button type="button" className={`${btn} hidden sm:grid`} onClick={() => map?.easeTo({ zoom: map.getZoom() - 1, duration: 300 })} aria-label="Zoom out" title="Zoom out">
         <Minus className="size-4" />
       </button>
-      <button type="button" className={btn} onClick={onNorth} aria-label="Reset bearing to north" title="Reset north">
-        <Compass className="size-[18px] text-gold-400" style={{ transform: `rotate(${-bearing - 45}deg)` }} />
+      <span className="mx-2.5 hidden h-px bg-white/[0.07] sm:block" aria-hidden />
+      <button type="button" className={btn} onClick={() => rotateBy(45)} aria-label="Rotate left 45°" title="Rotate left">
+        <RotateCcw className="size-4" />
       </button>
-      <button type="button" className={`${btn} ${pitch > 20 ? 'text-gold-300' : ''}`} onClick={onTilt} aria-label={pitch > 20 ? 'Switch to 2D' : 'Switch to 3D'} title="Toggle 3D">
+      <button type="button" className={btn} onClick={() => rotateBy(-45)} aria-label="Rotate right 45°" title="Rotate right">
+        <RotateCw className="size-4" />
+      </button>
+      <button
+        type="button"
+        className={btn}
+        onClick={() => {
+          target.current = null
+          map?.easeTo({ bearing: 0, duration: 600, easing: easeOut })
+        }}
+        aria-label="Reset bearing to north"
+        title="Reset north"
+      >
+        <Compass ref={compass} className="size-[18px] text-gold-400" style={{ transform: 'rotate(-45deg)' }} />
+      </button>
+      <span className="mx-2.5 h-px bg-white/[0.07]" aria-hidden />
+      <button type="button" className={`${btn} ${tilted ? 'text-gold-300' : ''}`} onClick={() => map?.easeTo({ pitch: tilted ? 0 : 60, duration: 700 })} aria-label={tilted ? 'Switch to 2D' : 'Switch to 3D'} title="Toggle 3D">
         <Box className="size-4" />
       </button>
       <button type="button" className={btn} onClick={onReset} aria-label="Reset view" title="Reset view">
         <Home className="size-4" />
       </button>
     </div>
+  )
+}
+
+const HINT_KEY = 'filmup:rotate-hint-seen'
+
+/** One-time rotation hint. Storage can throw (private mode, blocked cookies) — then it just shows each visit. */
+function useRotateHint(delayMs: number | null) {
+  const [visible, setVisible] = useState(false)
+  const done = useRef(false)
+
+  const markUsed = useCallback(() => {
+    if (done.current) return
+    done.current = true
+    setVisible(false)
+    try {
+      localStorage.setItem(HINT_KEY, '1')
+    } catch {
+      /* storage unavailable */
+    }
+  }, [])
+
+  useEffect(() => {
+    let seen = false
+    try {
+      seen = localStorage.getItem(HINT_KEY) === '1'
+    } catch {
+      /* storage unavailable */
+    }
+    if (seen) {
+      done.current = true
+      return
+    }
+    if (delayMs == null) return
+    const show = setTimeout(() => !done.current && setVisible(true), delayMs)
+    const hide = setTimeout(markUsed, delayMs + 14000)
+    return () => {
+      clearTimeout(show)
+      clearTimeout(hide)
+    }
+  }, [delayMs, markUsed])
+
+  return { visible, markUsed }
+}
+
+function RotateHint({ visible, offsetRight, onDismiss }: { visible: boolean; offsetRight: number; onDismiss: () => void }) {
+  const touch = window.matchMedia('(pointer: coarse)').matches
+  // Small screens: a centred pill above the Now Showing strip, so it never sits under the
+  // fingers doing the gesture. Larger screens: beside the map controls it refers to.
+  const compact = window.innerWidth < 640
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          role="status"
+          initial={compact ? { opacity: 0, y: 12, scale: 0.96 } : { opacity: 0, x: 12, scale: 0.96 }}
+          animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+          exit={compact ? { opacity: 0, y: 12, scale: 0.96 } : { opacity: 0, x: 12, scale: 0.96 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+          className={`glass fixed z-20 flex items-center gap-3 rounded-2xl py-2.5 pr-2 pl-3 ${compact ? 'inset-x-3 bottom-[96px] mx-auto w-fit' : 'top-1/2 max-w-[calc(100vw-96px)] -translate-y-1/2'}`}
+          style={compact ? undefined : { right: offsetRight + 56 }}
+        >
+          <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-gold-400/12 text-gold-300">
+            <RotateCw className="size-4" />
+          </span>
+          <span className="min-w-0 text-xs leading-snug">
+            <span className="block font-semibold text-white">{touch ? 'Twist with two fingers to rotate' : 'Shift + scroll or right-drag to rotate'}</span>
+            <span className="block text-neutral-400">{touch ? 'Drag two fingers up or down to tilt' : 'Or use the rotate buttons'}</span>
+          </span>
+          <button type="button" onClick={onDismiss} className="grid size-7 shrink-0 place-items-center rounded-full text-neutral-500 transition hover:bg-white/[0.07] hover:text-white" aria-label="Dismiss hint">
+            <X className="size-3.5" />
+          </button>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 

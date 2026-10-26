@@ -34,6 +34,11 @@ export interface Movie {
   /** Age rating, e.g. "U", "PG", "PG-13", "15+", "18+" */
   rating: string
   synopsis: string
+  director: string
+  cast: string[]
+  releaseYear: number
+  /** Optional — the Watch Trailer button hides when missing */
+  trailerUrl?: string
 }
 
 /**

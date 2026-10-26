@@ -46,6 +46,27 @@
   }
 }
 
+/* FilmUp wordmark: brushed chrome like the intro logo, with a warm gold glow */
+@utility wordmark {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  background: linear-gradient(180deg, #ffffff 0%, #e9ecf1 30%, #9aa1ab 52%, #f4f6f9 64%, #b9bfc8 82%, #7d848e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 0.15)) drop-shadow(0 0 14px rgb(245 194 107 / 0.35));
+}
+
+/* Letters animated individually (each has its own transform) need their own chrome fill */
+.wordmark-letter {
+  background: linear-gradient(180deg, #ffffff 0%, #e9ecf1 30%, #9aa1ab 52%, #f4f6f9 64%, #b9bfc8 82%, #7d848e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 @utility text-gold-gradient {
   background: linear-gradient(180deg, #fff1cf 0%, #f5c26b 55%, #c4862a 100%);
   -webkit-background-clip: text;
@@ -316,6 +337,80 @@
 .cm-cluster:hover {
   transform: scale(1.08);
   box-shadow: 0 0 0 7px rgb(245 194 107 / 0.12), 0 0 28px rgb(245 194 107 / 0.5);
+}
+
+/* Cluster states mirror the pins: match = gold glow + "N showing", active = red, dim = grey */
+.cm-cluster.is-match,
+.cm-cluster.is-active {
+  position: relative;
+  width: auto;
+  height: 34px;
+  padding: 0 12px 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.cm-cluster.is-match {
+  color: #1a1206;
+  background: radial-gradient(circle at 35% 30%, #fff1cf, #f5c26b 55%, #d99a3a 100%);
+  border-color: rgb(255 226 170 / 0.95);
+  box-shadow:
+    0 0 0 2px rgb(10 11 16 / 0.95),
+    0 0 0 3px rgb(245 194 107 / 0.7),
+    0 0 30px 6px rgb(245 194 107 / 0.6);
+}
+.cm-cluster.is-active {
+  color: #fff;
+  background: radial-gradient(circle at 35% 30%, #ffd0d5, #ff3b4e 55%, #b3162a 100%);
+  border-color: rgb(255 180 188 / 0.9);
+  box-shadow:
+    0 0 0 2px rgb(10 11 16 / 0.95),
+    0 0 0 3px rgb(255 59 78 / 0.8),
+    0 0 32px 8px rgb(255 59 78 / 0.55);
+}
+.cm-cluster.is-match::after,
+.cm-cluster.is-active::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 1.5px solid rgb(245 194 107 / 0.8);
+  animation: cm-cluster-pulse 2.4s var(--ease-cinema) infinite;
+  pointer-events: none;
+}
+.cm-cluster.is-active::after {
+  border-color: rgb(255 59 78 / 0.85);
+}
+@keyframes cm-cluster-pulse {
+  0% { transform: scale(1); opacity: 0.9; }
+  100% { transform: scale(1.45, 1.8); opacity: 0; }
+}
+.cm-cluster-count {
+  font: 800 14px/1 var(--font-sans);
+}
+.cm-cluster-label {
+  font: 700 10px/1 var(--font-sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.cm-cluster.is-match:hover,
+.cm-cluster.is-active:hover {
+  transform: scale(1.06);
+}
+.cm-cluster.is-dim {
+  opacity: 0.4;
+  filter: grayscale(1);
+  transform: scale(0.85);
+  border-color: rgb(255 255 255 / 0.2);
+  box-shadow: none;
+}
+.cm-cluster.is-dim:hover {
+  opacity: 0.7;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cm-cluster::after { animation: none; }
 }
 
 .cm-user {
