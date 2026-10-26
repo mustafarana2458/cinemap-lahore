@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600" width="400" height="600">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e39a3b"/><stop offset="1" stop-color="#3d1608"/></linearGradient>
+<radialGradient id="glow" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .07 0"/></filter>
+<linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".75"/></linearGradient>
+</defs>
+<rect width="400" height="600" fill="url(#bg)"/>
+<rect width="400" height="600" fill="url(#glow)"/>
+<path d="M120 300 H280 V380 Q280 450 200 450 Q120 450 120 380 Z" fill="#fff3df"/><path d="M280 320 Q330 320 330 360 Q330 400 280 398" fill="none" stroke="#fff3df" stroke-width="12"/><ellipse cx="200" cy="300" rx="80" ry="12" fill="#a8541c"/><path d="M165 270 Q150 230 170 200 Q190 170 170 130" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="5" stroke-linecap="round"/><path d="M200 270 Q185 230 205 200 Q225 170 205 130" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="5" stroke-linecap="round"/><path d="M235 270 Q220 230 240 200 Q260 170 240 130" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="5" stroke-linecap="round"/>
+<rect width="400" height="600" fill="url(#fade)"/>
+<rect width="400" height="600" filter="url(#n)"/>
+</svg>

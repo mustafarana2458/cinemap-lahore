@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600" width="400" height="600">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5fb6e8"/><stop offset="1" stop-color="#1d1f66"/></linearGradient>
+<radialGradient id="glow" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .07 0"/></filter>
+<linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".75"/></linearGradient>
+</defs>
+<rect width="400" height="600" fill="url(#bg)"/>
+<rect width="400" height="600" fill="url(#glow)"/>
+<path d="M70 56 L95.5 90 L70 134.2 L44.5 90 Z" fill="#ff5d73"/><path d="M70 134.2 Q40 210 80 600" fill="none" stroke="#fff" stroke-opacity=".5"/><path d="M153 114 L187.5 160 L153 219.8 L118.5 160 Z" fill="#ffd166"/><path d="M153 219.8 Q123 280 163 600" fill="none" stroke="#fff" stroke-opacity=".5"/><path d="M236 172 L279.5 230 L236 305.4 L192.5 230 Z" fill="#06d6a0"/><path d="M236 305.4 Q206 350 246 600" fill="none" stroke="#fff" stroke-opacity=".5"/><path d="M319 266 L344.5 300 L319 344.2 L293.5 300 Z" fill="#f78c6b"/><path d="M319 344.2 Q289 420 329 600" fill="none" stroke="#fff" stroke-opacity=".5"/><path d="M142 324 L176.5 370 L142 429.8 L107.5 370 Z" fill="#ffffff"/><path d="M142 429.8 Q112 490 152 600" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="0" y="540" width="30" height="80" fill="#141547"/><rect x="30" y="518" width="30" height="102" fill="#141547"/><rect x="60" y="496" width="30" height="124" fill="#141547"/><rect x="90" y="474" width="30" height="146" fill="#141547"/><rect x="120" y="540" width="30" height="80" fill="#141547"/><rect x="150" y="518" width="30" height="102" fill="#141547"/><rect x="180" y="496" width="30" height="124" fill="#141547"/><rect x="210" y="474" width="30" height="146" fill="#141547"/><rect x="240" y="540" width="30" height="80" fill="#141547"/><rect x="270" y="518" width="30" height="102" fill="#141547"/><rect x="300" y="496" width="30" height="124" fill="#141547"/><rect x="330" y="474" width="30" height="146" fill="#141547"/><rect x="360" y="540" width="30" height="80" fill="#141547"/><rect x="390" y="518" width="30" height="102" fill="#141547"/>
+<rect width="400" height="600" fill="url(#fade)"/>
+<rect width="400" height="600" filter="url(#n)"/>
+</svg>
